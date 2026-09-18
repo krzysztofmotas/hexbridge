@@ -1,0 +1,154 @@
+; HexBridge-ftdibus.inf
+;
+; OEM INF for Ross-Tech HEX-USB devices (USB\VID_0403&PID_FA20/FA23/FA24/FA25).
+;
+; This is a trimmed, minimal-diff patch of the REAL, current FTDI CDM
+; ftdibus.inf (version 2.12.36.20, DriverVer 10/28/2024), taken from the
+; official CDM package "CDM-v2.12.36.20-WHQL-Certified.zip" downloaded
+; from https://ftdichip.com/drivers/vcp-drivers/ (see driver/redist/).
+; See tools/cdm-extracted/ftdibus.inf for the untouched original.
+;
+; Changed vs. the real ftdibus.inf, per FTDI AN_107 section 4.1
+; "Modification of INF for Non-Default VID and PID Values":
+;   - [FtdiHw.NTamd64]: replaced FTDI's ~90 stock VID/PID entries with
+;     our own 4 (FA20/FA23/FA24/FA25, matching the original Ross-Tech
+;     RT-USB64.inf) - per the FTDI license text below, section 2:
+;     "If a custom vendor ID and/or product ID [...] are used, it is
+;     the responsibility of the product manufacturer to maintain any
+;     changes and subsequent WHQL re-certification"
+;   - [Strings]: device descriptions carried over 1:1 from the original
+;     Ross-Tech RT-USB64.inf
+;   - Provider / CatalogFile: point at this OEM package, not FTDI's own
+;   - Dropped the x86-only ([FtdiHw], [FtdiBus.NT]) sections: this
+;     project targets Windows 11 x64 only (see docs/ANALYSIS.md); the
+;     kernel driver is always 64-bit on x64 Windows regardless of the
+;     32-bit VCDS.exeL process bitness (WOW64 handles that transparently)
+;
+; NOT changed: driver file names (ftdibus.sys, ftd2xx.dll, ftd2xx64.dll,
+; ftbusui.dll, FTLang.dll keep their original FTDI names - AN_107
+; section 10 "Renaming Driver Files" says FTDI does not support this
+; and it invalidates certification), service name (FTDIBUS), PnpLockDown,
+; AddService/AddReg/EventLog_Inst/HW/Copy* section structure - these are
+; copied verbatim from the real file.
+;
+; TODO before production use:
+;   1. Confirm/adjust [Version] DriverVer if this INF is later paired
+;      with a different CDM package version than 2.12.36.20.
+;   2. Replace CatalogFile with the catalog produced after signing via
+;      Windows Hardware Dev Center (see docs/IMPLEMENTATION_PLAN.md,
+;      "Signing" section). For isolated-VM testing: a local test-signed
+;      catalog.
+;   3. driver/redist/ must contain the real, unmodified FTDI files
+;      (ftdibus.sys, ftd2xx.dll, ftd2xx64.dll, ftbusui.dll, FTLang.dll)
+;      copied from tools/cdm-extracted/{amd64,i386}/.
+;   4. Provider="%MfgName%" - fill in the actual submitting entity's name
+;      (Dev Center requires a verified publisher identity).
+;
+; The [Version] header below and the section names/structure are taken
+; from FTDI's ftdibus.inf, Copyright (c) 2000-2024 Future Technology
+; Devices International Limited, reused here under FTDI's own license
+; terms (embedded in tools/cdm-extracted/ftdibus.inf), condition 1.4.2:
+; "only use the Software in conjunction with products based on and/or
+; incorporating a Genuine FTDI Component" - HEX-USB physically contains
+; a Genuine FTDI Component, see docs/ANALYSIS.md.
+
+[Version]
+Signature="$Windows NT$"
+DriverPackageType=PlugAndPlay
+DriverPackageDisplayName=%DESC%
+Class=USB
+ClassGUID={36fc9e60-c465-11cf-8056-444553540000}
+Provider=%MfgName%
+CatalogFile=HexBridge-ftdibus.cat
+DriverVer=10/28/2024,2.12.36.20
+PnpLockDown=1
+
+[SourceDisksNames]
+1=%DriversDisk%,,,
+
+; NOTE: "= 1" with no subdirectory tag - all files sit flat, next to
+; this INF (see driver/redist/ and driver/package/), not in amd64/i386
+; subfolders like FTDI's own distributed package layout.
+[SourceDisksFiles.amd64]
+ftdibus.sys  = 1
+ftbusui.dll  = 1
+ftd2xx64.dll = 1
+ftd2xx.dll   = 1
+FTLang.Dll   = 1
+
+[DestinationDirs]
+FtdiBus.NTamd64.Copy  = 10,system32\drivers
+FtdiBus.NTamd64.Copy2 = 10,system32
+FtdiBus.NTamd64.Copy3 = 10,syswow64
+
+[Manufacturer]
+%Ftdi%=FtdiHw,NTamd64
+
+; --- Changed vs. FTDI original: own VID/PID instead of ~90 stock entries ---
+[FtdiHw.NTamd64]
+%USB\VID_0403&PID_FA20.DeviceDesc%=FtdiBus.NTamd64,USB\VID_0403&PID_FA20
+%USB\VID_0403&PID_FA23.DeviceDesc%=FtdiBus.NTamd64,USB\VID_0403&PID_FA23
+%USB\VID_0403&PID_FA24.DeviceDesc%=FtdiBus.NTamd64,USB\VID_0403&PID_FA24
+%USB\VID_0403&PID_FA25.DeviceDesc%=FtdiBus.NTamd64,USB\VID_0403&PID_FA25
+; --- end of change ---
+
+[ControlFlags]
+ExcludeFromSelect=*
+
+[FtdiBus.NTamd64]
+CopyFiles=FtdiBus.NTamd64.Copy,FtdiBus.NTamd64.Copy2,FtdiBus.NTamd64.Copy3
+AddReg=FtdiBus.NT.AddReg
+
+[FtdiBus.NTamd64.Services]
+AddService = FTDIBUS, 0x00000002, FtdiBus.NT.AddService, FtdiBus.NT.EventLog_Inst
+
+[FtdiBus.NT.AddService]
+DisplayName = %SvcDesc%
+ServiceType = 1 ; SERVICE_KERNEL_DRIVER
+StartType = 3 ; SERVICE_DEMAND_START
+ErrorControl = 1 ; SERVICE_ERROR_NORMAL
+ServiceBinary = %10%\system32\drivers\ftdibus.sys
+LoadOrderGroup = Base
+
+[FtdiBus.NT.AddReg]
+HKR,,DevLoader,,*ntkern
+HKR,,NTMPDriver,,ftdibus.sys
+HKR,,EnumPropPages32,,"ftbusui.dll,FTBUSUIPropPageProvider"
+
+[FtdiBus.NT.EventLog_Inst]
+AddReg = FtdiBus.NT.EventLog_Inst.AddReg
+
+[FtdiBus.NT.EventLog_Inst.AddReg]
+HKR,,EventMessageFile,0x00020000,"%%SystemRoot%%\System32\IoLogMsg.dll;%%SystemRoot%%\System32\drivers\ftdibus.sys"
+HKR,,TypesSupported,0x00010001,7
+
+[FtdiBus.NTamd64.HW]
+AddReg=FtdiBus.NT.HW.AddReg
+
+[FtdiBus.NT.HW.AddReg]
+;HKR,,"ConfigData",0x00010001,0x00000012
+
+[FtdiBus.NTamd64.Copy]
+ftdibus.sys
+
+[FtdiBus.NTamd64.Copy2]
+ftbusui.dll
+ftd2xx.dll,ftd2xx64.dll
+FTLang.dll
+
+[FtdiBus.NTamd64.Copy3]
+ftd2xx.dll
+
+; --- Changed vs. FTDI original: own descriptions instead of FTDI defaults ---
+[Strings]
+Ftdi="FTDI"
+MfgName="TODO: name of the entity submitting for Dev Center signing"
+DESC="HexBridge USB Driver Package (FTDI CDM 2.12.36.20, custom VID/PID)"
+DriversDisk="HexBridge USB Drivers Disk"
+USB\VID_0403&PID_FA20.DeviceDesc="Ross-Tech HEX or KEY USB Interface"
+USB\VID_0403&PID_FA23.DeviceDesc="Ross-Tech Micro-CAN Interface"
+USB\VID_0403&PID_FA24.DeviceDesc="Ross-Tech Direct USB Interface"
+USB\VID_0403&PID_FA25.DeviceDesc="Ross-Tech USB Converter"
+SvcDesc="HexBridge FTDI Bus Driver"
+ClassName="USB"
+; --- end of change ---
